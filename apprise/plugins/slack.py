@@ -76,6 +76,7 @@ import re
 import requests
 from json import dumps
 from json import loads
+from json import JSONDecodeError
 from time import time
 
 from .base import NotifyBase
@@ -410,16 +411,27 @@ class NotifySlack(NotifyBase):
                 if self.notify_format == NotifyFormat.MARKDOWN \
                 else 'plain_text'
 
+            if kwargs.get('body_format', None) == 'json':
+                try:
+                    content = loads(body)
+                except JSONDecodeError:
+                    self.logger.error(
+                        "'body_format' is set as 'json',"
+                        "but body is not valid JSON string"
+                    )
+                    return False
+            else:
+                content = [{
+                    'type': 'section',
+                    'text': {
+                        'type': _slack_format,
+                        'text': body
+                    }
+                }]
             payload = {
                 'username': self.user if self.user else self.app_id,
                 'attachments': [{
-                    'blocks': [{
-                        'type': 'section',
-                        'text': {
-                            'type': _slack_format,
-                            'text': body
-                        }
-                    }],
+                    'blocks': content,
                     'color': self.color(notify_type),
                 }]
             }
@@ -463,6 +475,13 @@ class NotifySlack(NotifyBase):
                 payload['attachments'][0]['blocks'].append(_footer)
 
         else:
+            if kwargs.get('body_format', None) == 'json':
+                self.logger.error(
+                    "'body_format' is set as 'json',"
+                    "the 'blocks' URL parameter is not set"
+                )
+                return False
+
             #
             # Legacy API Formatting
             #
